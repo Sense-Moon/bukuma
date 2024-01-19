@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<head>
+
+<script type="module" src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+<script type="module" src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
+<script type="module" src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"></script>
+
+</head>
+
+<style>
+
+body {
+	margin: 0;
+	padding: 0;
+	justify-content: center;
+	width: 100%;
+	height: 99vh;
+	font-family: serif;
+	background-color: #0B1013;
+	overflow: scroll;
+	color: #d0d8de;
+	margin-top: 10%;
+    text-align: center;
+    font-size: 18px;
+}
+  
+/*スクロールバー非表示*/
+::-webkit-scrollbar {
+	display: none;
+}
+body {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+button {
+	font-family: serif;
+	font-size:7.2vw;
+	font-style: bold;
+}
+
+
+.tag {
+    display: inline-block;
+    padding: 10px;
+    background-color: #444;
+    color: #d0d8de;
+    border-radius: 5px;
+    margin: 5px;
+    cursor: pointer;
+    user-select: none;
+}
+.tag.selected {
+    background-color: #eeebeb;
+    color: #080808;
+}
+
+.button {
+    color: #eeebeb;
+    background-color: #222;
+    font-weight: bold;
+    border-radius: 0.5rem;
+    align-items: center;
+    border: none;
+    font-size: 24px;
+    width: 160px;
+    height: 80px;
+    margin: 20px;
+    padding: 20px;
+}
+
+.button:hover {
+	background-color: #333;
+}
+
+a:link {
+    color: #a3bffa;
+}
+
+a:visited {
+    color: #ffa3a3;
+}
+
+
+
+</style>
+
+<a href="./read.html">閲覧ページ</a>
+
+<body>
+    <h1>投稿フォーム</h1>
+    <form>
+        <label for="title">・タイトル</label>
+        <br>
+        <input type="text" id="title" name="title" maxlength="100">
+        <br>
+        <label for="url">・URL</label>
+        <br>
+        <input type="text" id="url" name="url">
+        <br>
+        <label>・タグ</label>
+        <br>
+        <div id="tags">
+            <!-- タグはここに動的に生成 -->
+        </div>
+        <label for="content">・本文</label>
+        <br>
+        <div id="char-count">0/1000文字</div>
+        <textarea id="message" name="content" maxlength="1000" cols="40" rows="16" oninput="updateCharacterCount()"></textarea>
+        <br>
+        <input type="submit" class="button" value="投稿">
+    </form>
+</body>
+
+
+<script type="module">
+const firebaseConfig = {
+apiKey: "AIzaSyAKvoX9I14uUOj7dYEItVXJGr-gNMz1xfc",
+  authDomain: "testgame-5940a.firebaseapp.com",
+  databaseURL: "https://testgame-5940a-default-rtdb.firebaseio.com",
+  projectId: "testgame-5940a",
+  storageBucket: "testgame-5940a.appspot.com",
+  messagingSenderId: "189198151711",
+  appId: "1:189198151711:web:4e67860e2222d2eb10252a",
+  measurementId: "G-Y0V1D8CHZJ"
+};
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, setPersistence, signInWithEmailAndPassword,onAuthStateChanged,GoogleAuthProvider,browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getDatabase, ref, set, onValue, get,push,update} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+//タグ
+const tags = ['マンガ', 'アニメ', 'ゲーム','小説', '詩歌', '音楽', '音声', '映画', '動画', '料理','お菓子', '自然 ','植物','動物', '手芸', '工芸', '旅行', '笑える', 'スレ','スポーツ'];
+const tagsContainer = document.getElementById('tags');
+
+tags.forEach(tag => {
+    const div = document.createElement('div');
+    div.textContent = tag;
+    div.classList.add('tag');
+    div.addEventListener('click', () => {
+        div.classList.toggle('selected');
+    });
+    tagsContainer.appendChild(div);
+});
+
+
+// 投稿フォームの取得
+const form = document.querySelector('form');
+
+// フォームの送信イベントリスナー
+form.addEventListener('submit', (e) => {
+    e.preventDefault(); // デフォルトのフォーム送信を防ぐ
+
+    // 入力値の取得
+    const title = document.getElementById('title').value;
+    const url = document.getElementById('url').value;
+    let content = document.getElementById('message').value;
+
+    // 改行を <br> に置換
+    content = content.replace(/\n/g, '<br>');
+
+    // 選択されたタグの取得
+    const selectedTags = Array.from(document.querySelectorAll('.tag.selected')).map(tag => tag.textContent);
+
+    // 入力値の検証
+    if (!title || !url || !content || selectedTags.length === 0) {
+        alert('全てのフィールドを入力して、少なくとも1つのタグを選択してください。');
+        return; // 送信を中止
+    }
+
+    // Firebaseに保存するデータの作成
+    const postData = {
+        title,
+        tags: selectedTags,
+        url,
+        content,
+    };
+
+    // 一意の識別子を持つ新しいノードを作成
+    const newPostRef = push(ref(db, 'titles'));
+    set(newPostRef, postData)
+    .then(() => {
+        console.log('Data saved successfully.');
+        // ページのリロード
+        location.reload();
+    })
+    .catch((error) => {
+        console.error('Failed to save data:', error);
+    });
+
+});
+
+</script>
+
+<script>
+
+//文字数カウント
+function updateCharacterCount() {
+        let inputText = document.getElementById('message').value;
+        let charCount = document.getElementById('char-count');
+        charCount.textContent = inputText.length + '/1000文字';
+}
+
+// ダブルタップ禁止
+let touchStartTime;
+let tapCount = 0;
+
+window.addEventListener('touchstart', function(event) {
+    if (event.touches.length > 1) {
+        // ピンチイン/アウトの開始
+        tapCount = 0; // タップカウントをリセット
+    } else {
+        // シングルタップの開始
+        if (!touchStartTime) {
+            // 最初のタップ
+            touchStartTime = Date.now();
+            tapCount = 1;
+        } else {
+            // 2回目のタップ
+            if (Date.now() - touchStartTime < 300) {
+                tapCount++;
+            } else {
+                // タイムアウトしたのでリセット
+                touchStartTime = Date.now();
+                tapCount = 1;
+            }
+        }
+    }
+}, { passive: false });
+
+window.addEventListener('touchend', function(event) {
+    if (tapCount === 2) {
+        event.preventDefault(); // ダブルタップを禁止
+    }
+}, false);
+
+</script>
+
+</html>

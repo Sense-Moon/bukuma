@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<head>
+
+<script type="module" src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+<script type="module" src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
+<script type="module" src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"></script>
+
+</head>
+
+<style>
+
+body {
+	margin: 0;
+	padding: 0;
+	justify-content: center;
+	width: 100%;
+	height: 99vh;
+	font-family: serif;
+	background-color: #0B1013;
+	overflow: scroll;
+	color: #d0d8de;
+	margin-top: 10%;
+    text-align: center;
+    font-size: 18px;
+}
+  
+/*スクロールバー非表示*/
+::-webkit-scrollbar {
+	display: none;
+}
+body {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+.button {
+    color: #eeebeb;
+    background-color: #222;
+    font-weight: bold;
+    border-radius: 0.5rem;
+    align-items: center;
+    border: none;
+    font-size: 24px;
+    width: 160px;
+    height: 80px;
+    margin: 20px;
+    padding: 20px;
+}
+
+.button:hover {
+	background-color: #333;
+}
+
+
+.tag {
+    display: inline-block;
+    padding: 10px;
+    background-color: #444;
+    color: #d0d8de;
+    border-radius: 5px;
+    margin: 5px;
+    cursor: pointer;
+    user-select: none;
+}
+.tag.selected {
+    background-color: #eeebeb;
+    color: #080808;
+}
+
+a:link {
+    color: #a3bffa;
+}
+
+a:visited {
+    color: #ffa3a3;
+}
+a{
+    margin-bottom: 20px;
+}
+
+div#tags {
+    margin: 20px;
+}
+
+</style>
+
+<body>
+    <a href="./write.html">投稿ページ</a>
+    <div id="tags">
+    </div>
+
+    <button id="fetch" class="button">Random</button>
+    <div id="post">
+    </div>
+</body>
+
+
+<script type="module">
+const firebaseConfig = {
+apiKey: "AIzaSyAKvoX9I14uUOj7dYEItVXJGr-gNMz1xfc",
+  authDomain: "testgame-5940a.firebaseapp.com",
+  databaseURL: "https://testgame-5940a-default-rtdb.firebaseio.com",
+  projectId: "testgame-5940a",
+  storageBucket: "testgame-5940a.appspot.com",
+  messagingSenderId: "189198151711",
+  appId: "1:189198151711:web:4e67860e2222d2eb10252a",
+  measurementId: "G-Y0V1D8CHZJ"
+};
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, setPersistence, signInWithEmailAndPassword,onAuthStateChanged,GoogleAuthProvider,browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getDatabase, ref, set, onValue, get,push,update} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+//タグ
+const tags = ['マンガ', 'アニメ', 'ゲーム','小説', '詩歌', '音楽', '音声', '映画', '動画', '料理','お菓子', '自然 ','植物','動物', '手芸', '工芸', '旅行', '笑える', 'スレ','スポーツ'];
+const tagsContainer = document.getElementById('tags');
+
+tags.forEach(tag => {
+    const div = document.createElement('div');
+    div.textContent = tag;
+    div.classList.add('tag');
+    div.addEventListener('click', () => {
+        div.classList.toggle('selected');
+    });
+    tagsContainer.appendChild(div);
+});
+
+
+document.getElementById('fetch').addEventListener('click', () => {
+    const selectedTags = Array.from(document.querySelectorAll('.tag.selected')).map(tag => tag.textContent);
+
+    const postsRef = ref(db, 'titles');
+    get(postsRef).then((snapshot) => {
+        const posts = snapshot.val();
+        const filteredPosts = Object.entries(posts).filter(([title, postData]) => {
+            return postData.tags.some(tag => selectedTags.includes(tag));
+        });
+
+        if (filteredPosts.length === 0) {
+            alert('タグを一つ以上選択してないか、そのタグに投稿がない');
+            return;
+        }
+
+        const selectedPosts = [];
+        for (let i = 0; i < 3; i++) {
+            if (filteredPosts.length === 0) {
+                break;
+            }
+            const randomIndex = Math.floor(Math.random() * filteredPosts.length);
+            selectedPosts.push(filteredPosts[randomIndex]);
+            filteredPosts.splice(randomIndex, 1);
+        }
+
+        const postDiv = document.getElementById('post');
+        postDiv.innerHTML = '';
+        selectedPosts.forEach(([id, postData]) => {
+            postDiv.innerHTML += `<h2>【${postData.title}】</h2>`;
+            postDiv.innerHTML += `<p>URL: <a href="${postData.url}" target="_blank">${postData.url}</a></p>`;
+            postDiv.innerHTML += `<p>【タグ】</p>`;
+            postDiv.innerHTML += `<p>${postData.tags.join(', ')}</p>`;
+            postDiv.innerHTML += `<p>【説明】</p>`;
+            postDiv.innerHTML += `<p>${postData.content}</p>`;
+            postDiv.innerHTML += '<hr>';
+        });
+
+    });
+});
+
+
+
+
+</script>
+
+<script>
+
+
+// ダブルタップ禁止
+let touchStartTime;
+let tapCount = 0;
+
+window.addEventListener('touchstart', function(event) {
+    if (event.touches.length > 1) {
+        // ピンチイン/アウトの開始
+        tapCount = 0; // タップカウントをリセット
+    } else {
+        // シングルタップの開始
+        if (!touchStartTime) {
+            // 最初のタップ
+            touchStartTime = Date.now();
+            tapCount = 1;
+        } else {
+            // 2回目のタップ
+            if (Date.now() - touchStartTime < 300) {
+                tapCount++;
+            } else {
+                // タイムアウトしたのでリセット
+                touchStartTime = Date.now();
+                tapCount = 1;
+            }
+        }
+    }
+}, { passive: false });
+
+window.addEventListener('touchend', function(event) {
+    if (tapCount === 2) {
+        event.preventDefault(); // ダブルタップを禁止
+    }
+}, false);
+
+</script>
+
+</html>
